@@ -10,5 +10,5 @@ dist/
 *.out
 
 # Local binary generated in project root
-wechat-article-markdown
+./wechat-article-markdown
 
