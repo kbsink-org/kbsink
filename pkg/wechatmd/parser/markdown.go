@@ -2,6 +2,8 @@ package parser
 
 import (
 	"bytes"
+	"encoding/json"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -81,10 +83,11 @@ func renderMarkdownNode(n *html.Node, buf *bytes.Buffer) {
 			buf.WriteString("\n```")
 			buf.WriteString(lang)
 			buf.WriteString("\n")
-			buf.WriteString(strings.TrimSpace(nodeText(n)))
+			buf.WriteString(strings.TrimSpace(codeTextFromPre(n)))
 			buf.WriteString("\n```\n\n")
 		case "blockquote":
-			lines := strings.Split(strings.TrimSpace(nodeText(n)), "\n")
+			quoted := expandInlineBullets(renderNodeToString(n))
+			lines := strings.Split(strings.TrimSpace(quoted), "\n")
 			for _, line := range lines {
 				line = strings.TrimSpace(line)
 				if line != "" {
@@ -123,9 +126,28 @@ func renderMarkdownNode(n *html.Node, buf *bytes.Buffer) {
 		case "ul":
 			for child := n.FirstChild; child != nil; child = child.NextSibling {
 				if child.Type == html.ElementNode && child.Data == "li" {
+					item := normalizeMarkdown(strings.TrimSpace(renderNodeToString(child)))
+					item = strings.TrimSpace(item)
+					if item == "" {
+						continue
+					}
+					itemLines := strings.Split(item, "\n")
 					buf.WriteString("- ")
-					buf.WriteString(strings.TrimSpace(nodeText(child)))
+					buf.WriteString(itemLines[0])
 					buf.WriteString("\n")
+					for i := 1; i < len(itemLines); i++ {
+						if strings.TrimSpace(itemLines[i]) == "" {
+							buf.WriteString("\n")
+							continue
+						}
+						buf.WriteString("  ")
+						buf.WriteString(itemLines[i])
+						buf.WriteString("\n")
+					}
+					continue
+				}
+				if child.Type == html.ElementNode && (child.Data == "ul" || child.Data == "ol") {
+					renderMarkdownNode(child, buf)
 				}
 			}
 			buf.WriteString("\n")
@@ -133,11 +155,30 @@ func renderMarkdownNode(n *html.Node, buf *bytes.Buffer) {
 			index := 1
 			for child := n.FirstChild; child != nil; child = child.NextSibling {
 				if child.Type == html.ElementNode && child.Data == "li" {
+					item := normalizeMarkdown(strings.TrimSpace(renderNodeToString(child)))
+					item = strings.TrimSpace(item)
+					if item == "" {
+						continue
+					}
+					itemLines := strings.Split(item, "\n")
 					buf.WriteString(strconv.Itoa(index))
 					buf.WriteString(". ")
-					buf.WriteString(strings.TrimSpace(nodeText(child)))
+					buf.WriteString(itemLines[0])
 					buf.WriteString("\n")
+					for i := 1; i < len(itemLines); i++ {
+						if strings.TrimSpace(itemLines[i]) == "" {
+							buf.WriteString("\n")
+							continue
+						}
+						buf.WriteString("   ")
+						buf.WriteString(itemLines[i])
+						buf.WriteString("\n")
+					}
 					index++
+					continue
+				}
+				if child.Type == html.ElementNode && (child.Data == "ul" || child.Data == "ol") {
+					renderMarkdownNode(child, buf)
 				}
 			}
 			buf.WriteString("\n")
@@ -213,4 +254,146 @@ func codeLanguage(pre *html.Node) string {
 		}
 	}
 	return ""
+}
+
+func renderNodeToString(n *html.Node) string {
+	var b bytes.Buffer
+	for child := n.FirstChild; child != nil; child = child.NextSibling {
+		renderMarkdownNode(child, &b)
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func codeTextFromPre(pre *html.Node) string {
+	var lines []string
+	var walk func(*html.Node)
+	walk = func(cur *html.Node) {
+		if cur == nil {
+			return
+		}
+		if cur.Type == html.ElementNode {
+			if shouldIgnoreCodeNode(cur) {
+				return
+			}
+			if cur.Data == "br" {
+				lines = append(lines, "\n")
+				return
+			}
+		}
+		if cur.Type == html.TextNode {
+			text := strings.ReplaceAll(cur.Data, "\u00a0", " ")
+			text = strings.TrimRight(text, "\r")
+			if text != "" {
+				lines = append(lines, text)
+			}
+		}
+		for c := cur.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+		if cur.Type == html.ElementNode && isCodeLineNode(cur) {
+			lines = append(lines, "\n")
+		}
+	}
+	walk(pre)
+	out := strings.Join(lines, "")
+	out = strings.ReplaceAll(out, "\r\n", "\n")
+	out = strings.ReplaceAll(out, "\r", "\n")
+	out = strings.ReplaceAll(out, "\n\n\n", "\n\n")
+	out = cleanupWechatCodeArtifacts(strings.TrimSpace(out))
+	out = tryPrettyJSON(out)
+	return out
+}
+
+func shouldIgnoreCodeNode(n *html.Node) bool {
+	className := attr(n, "class")
+	if className == "" {
+		return false
+	}
+	return containsAnyClassToken(className,
+		"line-number",
+		"line_numbers",
+		"lineNum",
+		"code-snippet__js__line-num",
+		"line-counter",
+	)
+}
+
+func isCodeLineNode(n *html.Node) bool {
+	className := attr(n, "class")
+	if className == "" {
+		return false
+	}
+	return containsAnyClassToken(className,
+		"code-snippet__line",
+		"hljs-ln-line",
+	)
+}
+
+func containsAnyClassToken(className string, targets ...string) bool {
+	lower := strings.ToLower(className)
+	for _, t := range targets {
+		if strings.Contains(lower, strings.ToLower(t)) {
+			return true
+		}
+	}
+	return false
+}
+
+var (
+	artifactPrefixRE = regexp.MustCompile(`^(?:[a-zA-Z]*ounter\()+`)
+)
+
+func cleanupWechatCodeArtifacts(s string) string {
+	s = strings.TrimSpace(s)
+	s = artifactPrefixRE.ReplaceAllString(s, "")
+	// Keep content from first useful token for common snippets.
+	if idx := strings.IndexAny(s, "{["); idx > 0 {
+		prefix := strings.TrimSpace(s[:idx])
+		if !strings.Contains(prefix, "\n") {
+			s = s[idx:]
+		}
+	}
+	// Handle compressed numbered text like "1.xxx2.yyy3.zzz".
+	s = regexp.MustCompile(`([^\n])(\d+\.\s*)`).ReplaceAllString(s, "$1\n$2")
+	// Some snippets leak a standalone "line" token before numbered content.
+	s = regexp.MustCompile(`(?i)^line\s*\n([0-9]+\.)`).ReplaceAllString(s, "$1")
+	// Some WeChat snippets leak trailing ')' artifacts after JSON bodies.
+	if strings.HasPrefix(strings.TrimSpace(s), "{") || strings.HasPrefix(strings.TrimSpace(s), "[") {
+		s = strings.TrimRight(s, ") \t")
+	}
+	return strings.TrimSpace(s)
+}
+
+func tryPrettyJSON(s string) string {
+	s = strings.TrimSpace(s)
+	if !(strings.HasPrefix(s, "{") && strings.HasSuffix(s, "}")) &&
+		!(strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]")) {
+		return s
+	}
+	var v any
+	if err := json.Unmarshal([]byte(s), &v); err != nil {
+		return s
+	}
+	out, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return s
+	}
+	return string(out)
+}
+
+func expandInlineBullets(s string) string {
+	s = strings.TrimSpace(s)
+	if strings.Count(s, "•") <= 1 {
+		return s
+	}
+	parts := strings.Split(s, "•")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		out = append(out, "• "+part)
+	}
+	return strings.Join(out, "\n")
 }
