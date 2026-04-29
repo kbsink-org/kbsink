@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/kbsink-org/kbsink/pkg"
+	kbsink "github.com/kbsink-org/kbsink/pkg"
 	"github.com/kbsink-org/kbsink/pkg/core"
 )
 

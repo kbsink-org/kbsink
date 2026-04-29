@@ -84,12 +84,12 @@ go run ./examples/basic "https://mp.weixin.qq.com/s/xxxx"
 Build/install locally:
 
 ```bash
-go install ./cmd/wechat-article-markdown
+go install ./cmd/kb-sink-md
 ```
 
 Run:
 
 ```bash
-wechat-article-markdown -o output "https://mp.weixin.qq.com/s/xxxx"
+kb-sink-md -o output "https://mp.weixin.qq.com/s/xxxx"
 ```
 
