@@ -7,7 +7,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/SolaTyolo/wechat-article-markdown/pkg/wechatmd/core"
+	"github.com/kbsink-org/kbsink/pkg/core"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"

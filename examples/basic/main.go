@@ -6,8 +6,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/SolaTyolo/wechat-article-markdown/pkg/wechatmd"
-	"github.com/SolaTyolo/wechat-article-markdown/pkg/wechatmd/core"
+	"github.com/kbsink-org/kbsink/pkg"
+	"github.com/kbsink-org/kbsink/pkg/core"
 )
 
 func main() {
@@ -16,7 +16,7 @@ func main() {
 	}
 	url := os.Args[1]
 
-	converter := wechatmd.NewConverter()
+	converter := kbsink.NewConverter()
 	res, err := converter.Convert(context.Background(), url, core.ConvertOptions{
 		OutputRoot: "output",
 	})

@@ -1,11 +1,11 @@
-package wechatmd
+package kbsink
 
 import (
 	"net/http"
 
-	drv "github.com/SolaTyolo/wechat-article-markdown/pkg/wechatmd/driver"
-	prs "github.com/SolaTyolo/wechat-article-markdown/pkg/wechatmd/parser"
-	stg "github.com/SolaTyolo/wechat-article-markdown/pkg/wechatmd/storage"
+	drv "github.com/kbsink-org/kbsink/pkg/driver"
+	prs "github.com/kbsink-org/kbsink/pkg/parser"
+	stg "github.com/kbsink-org/kbsink/pkg/storage"
 )
 
 type converterConfig struct {

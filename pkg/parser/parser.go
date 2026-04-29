@@ -3,7 +3,7 @@ package parser
 import (
 	"context"
 
-	"github.com/SolaTyolo/wechat-article-markdown/pkg/wechatmd/core"
+	"github.com/kbsink-org/kbsink/pkg/core"
 )
 
 // Parser transforms raw HTML into metadata + markdown + image references.

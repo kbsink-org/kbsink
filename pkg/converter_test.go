@@ -1,4 +1,4 @@
-package wechatmd
+package kbsink
 
 import (
 	"context"
@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SolaTyolo/wechat-article-markdown/pkg/wechatmd/core"
-	prs "github.com/SolaTyolo/wechat-article-markdown/pkg/wechatmd/parser"
+	"github.com/kbsink-org/kbsink/pkg/core"
+	prs "github.com/kbsink-org/kbsink/pkg/parser"
 )
 
 type memoryStorage struct {

@@ -1,4 +1,4 @@
-# wechat-article-markdown (Go Library)
+# kbsink (Go Library)
 
 [中文文档](./README-zh.md)
 
@@ -25,13 +25,13 @@ A reusable Go library that converts WeChat Official Account article URLs into st
 ## Install
 
 ```bash
-go get github.com/SolaTyolo/wechat-article-markdown
+go get github.com/kbsink-org/kbsink
 ```
 
 ## Quick Start
 
 ```go
-converter := wechatmd.NewConverter()
+converter := kbsink.NewConverter()
 res, err := converter.Convert(ctx, "https://mp.weixin.qq.com/s/xxxx", core.ConvertOptions{
     OutputRoot: "output",
 })

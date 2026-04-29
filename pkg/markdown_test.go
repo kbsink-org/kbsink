@@ -1,11 +1,11 @@
-package wechatmd
+package kbsink
 
 import (
 	"strings"
 	"testing"
 
 	"github.com/PuerkitoBio/goquery"
-	prs "github.com/SolaTyolo/wechat-article-markdown/pkg/wechatmd/parser"
+	prs "github.com/kbsink-org/kbsink/pkg/parser"
 )
 
 func TestSelectionToMarkdown(t *testing.T) {

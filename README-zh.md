@@ -1,4 +1,4 @@
-# wechat-article-markdown（Go 库）
+# kbsink（Go 库）
 
 [English README](./README.md)
 
@@ -25,13 +25,13 @@
 ## 安装
 
 ```bash
-go get github.com/SolaTyolo/wechat-article-markdown
+go get github.com/kbsink-org/kbsink
 ```
 
 ## 快速开始
 
 ```go
-converter := wechatmd.NewConverter()
+converter := kbsink.NewConverter()
 res, err := converter.Convert(ctx, "https://mp.weixin.qq.com/s/xxxx", core.ConvertOptions{
     OutputRoot: "output",
 })

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/SolaTyolo/wechat-article-markdown/pkg/wechatmd/core"
+	"github.com/kbsink-org/kbsink/pkg/core"
 )
 
 // HTMLDriver fetches HTML from a page URL through plain HTTP.

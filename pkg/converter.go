@@ -1,4 +1,4 @@
-package wechatmd
+package kbsink
 
 import (
 	"context"
@@ -12,10 +12,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/SolaTyolo/wechat-article-markdown/pkg/wechatmd/core"
-	drv "github.com/SolaTyolo/wechat-article-markdown/pkg/wechatmd/driver"
-	prs "github.com/SolaTyolo/wechat-article-markdown/pkg/wechatmd/parser"
-	stg "github.com/SolaTyolo/wechat-article-markdown/pkg/wechatmd/storage"
+	"github.com/kbsink-org/kbsink/pkg/core"
+	drv "github.com/kbsink-org/kbsink/pkg/driver"
+	prs "github.com/kbsink-org/kbsink/pkg/parser"
+	stg "github.com/kbsink-org/kbsink/pkg/storage"
 )
 
 const (

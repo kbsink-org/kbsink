@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/SolaTyolo/wechat-article-markdown/pkg/wechatmd/core"
+	"github.com/kbsink-org/kbsink/pkg/core"
 )
 
 // DouyinParser extracts metadata/content/media from Douyin share HTML.

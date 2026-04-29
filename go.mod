@@ -1,4 +1,4 @@
-module github.com/SolaTyolo/wechat-article-markdown
+module github.com/kbsink-org/kbsink
 
 go 1.25.7
 

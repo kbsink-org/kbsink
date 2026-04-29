@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SolaTyolo/wechat-article-markdown/pkg/wechatmd"
-	"github.com/SolaTyolo/wechat-article-markdown/pkg/wechatmd/core"
-	prs "github.com/SolaTyolo/wechat-article-markdown/pkg/wechatmd/parser"
+	"github.com/kbsink-org/kbsink/pkg"
+	"github.com/kbsink-org/kbsink/pkg/core"
+	prs "github.com/kbsink-org/kbsink/pkg/parser"
 )
 
 func main() {
@@ -45,7 +45,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "resolve platform parser failed: %v\n", err)
 		os.Exit(1)
 	}
-	converter := wechatmd.NewConverter(wechatmd.WithParser(parser))
+	converter := kbsink.NewConverter(kbsink.WithParser(parser))
 	res, err := converter.Convert(ctx, articleURL, core.ConvertOptions{OutputRoot: *outputRoot})
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "convert failed: %v\n", err)
