@@ -31,14 +31,27 @@ func (s *LocalStorage) Save(_ context.Context, article *core.ArticleResult) erro
 	if err := os.MkdirAll(baseDir, 0o755); err != nil {
 		return err
 	}
-	imageDir := filepath.Join(baseDir, "images")
-	if err := os.MkdirAll(imageDir, 0o755); err != nil {
-		return err
+	assets := article.Assets
+	if len(assets) == 0 && len(article.Images) > 0 {
+		assets = make([]core.Asset, 0, len(article.Images))
+		for _, img := range article.Images {
+			assets = append(assets, core.Asset{
+				Type:         core.AssetTypeImage,
+				SourceURL:    img.SourceURL,
+				RelativePath: img.RelativePath,
+				FileName:     img.FileName,
+				ContentType:  img.ContentType,
+				Data:         img.Data,
+			})
+		}
 	}
 
-	for _, img := range article.Images {
-		target := filepath.Join(baseDir, filepath.FromSlash(img.RelativePath))
-		if err := os.WriteFile(target, img.Data, 0o644); err != nil {
+	for _, asset := range assets {
+		target := filepath.Join(baseDir, filepath.FromSlash(asset.RelativePath))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(target, asset.Data, 0o644); err != nil {
 			return err
 		}
 	}

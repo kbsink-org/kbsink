@@ -17,6 +17,24 @@ type ImageAsset struct {
 	Data         []byte
 }
 
+// AssetType indicates the media category of one asset.
+type AssetType string
+
+const (
+	AssetTypeImage AssetType = "image"
+	AssetTypeVideo AssetType = "video"
+)
+
+// Asset stores a generic media mapping and optional binary payload.
+type Asset struct {
+	Type         AssetType
+	SourceURL    string
+	RelativePath string
+	FileName     string
+	ContentType  string
+	Data         []byte
+}
+
 // ArticleResult is the final structured output for one URL conversion.
 type ArticleResult struct {
 	Title          string
@@ -27,6 +45,7 @@ type ArticleResult struct {
 	OutputDir      string
 	MarkdownPath   string
 	Markdown       string
+	Assets         []Asset
 	Images         []ImageAsset
 	RawHTMLContent string
 }

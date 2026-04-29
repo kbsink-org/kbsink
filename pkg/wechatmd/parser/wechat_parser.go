@@ -41,6 +41,7 @@ func (p *WechatParser) Parse(_ context.Context, fetched *core.FetchResult, outpu
 	}
 
 	images := make([]core.ImageAsset, 0)
+	assets := make([]core.Asset, 0)
 	contentSel.Find("img").Each(func(_ int, sel *goquery.Selection) {
 		src := strings.TrimSpace(sel.AttrOr("data-src", ""))
 		if src == "" {
@@ -50,6 +51,10 @@ func (p *WechatParser) Parse(_ context.Context, fetched *core.FetchResult, outpu
 			images = append(images, core.ImageAsset{
 				SourceURL:    src,
 				RelativePath: path.Join(outputDir, "images"),
+			})
+			assets = append(assets, core.Asset{
+				Type:      core.AssetTypeImage,
+				SourceURL: src,
 			})
 		}
 	})
@@ -69,6 +74,7 @@ func (p *WechatParser) Parse(_ context.Context, fetched *core.FetchResult, outpu
 		PublishedAt:    publishedAt,
 		SourceURL:      sourceURL,
 		Markdown:       md,
+		Assets:         assets,
 		Images:         images,
 		RawHTMLContent: rawHTML,
 	}, nil

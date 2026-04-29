@@ -95,25 +95,62 @@ func (c *Converter) Convert(ctx context.Context, articleURL string, opts core.Co
 	parsed.OutputDir = filepath.ToSlash(path.Join(outputRoot, parsed.SafeTitle))
 	parsed.MarkdownPath = filepath.ToSlash(path.Join(parsed.OutputDir, parsed.SafeTitle+".md"))
 
-	for i := range parsed.Images {
-		data, contentType, ext, dlErr := c.downloadImage(ctx, parsed.Images[i].SourceURL)
-		if dlErr != nil {
-			return nil, fmt.Errorf("download image %q: %w", parsed.Images[i].SourceURL, dlErr)
+	assets := parsed.Assets
+	if len(assets) == 0 && len(parsed.Images) > 0 {
+		assets = make([]core.Asset, 0, len(parsed.Images))
+		for _, img := range parsed.Images {
+			assets = append(assets, core.Asset{
+				Type:      core.AssetTypeImage,
+				SourceURL: img.SourceURL,
+			})
 		}
-		idx := i + 1
-		fileName := fmt.Sprintf("img_%03d%s", idx, ext)
-		relativePath := filepath.ToSlash(path.Join("images", fileName))
-		parsed.Images[i].FileName = fileName
-		parsed.Images[i].RelativePath = relativePath
-		parsed.Images[i].ContentType = contentType
-		parsed.Images[i].Data = data
 	}
+	imageIdx := 0
+	videoIdx := 0
+	for i := range assets {
+		data, contentType, ext, dlErr := c.downloadAsset(ctx, assets[i].SourceURL)
+		if dlErr != nil {
+			return nil, fmt.Errorf("download asset %q: %w", assets[i].SourceURL, dlErr)
+		}
+		assetType := assets[i].Type
+		if assetType == "" {
+			assetType = inferAssetType(contentType)
+		}
+		if assetType == "" {
+			assetType = core.AssetTypeImage
+		}
+
+		var idx int
+		var fileName string
+		var relativePath string
+		switch assetType {
+		case core.AssetTypeVideo:
+			videoIdx++
+			idx = videoIdx
+			fileName = fmt.Sprintf("video_%03d%s", idx, ext)
+			relativePath = filepath.ToSlash(path.Join("videos", fileName))
+		default:
+			imageIdx++
+			idx = imageIdx
+			fileName = fmt.Sprintf("img_%03d%s", idx, ext)
+			relativePath = filepath.ToSlash(path.Join("images", fileName))
+			assetType = core.AssetTypeImage
+		}
+
+		assets[i].Type = assetType
+		assets[i].FileName = fileName
+		assets[i].RelativePath = relativePath
+		assets[i].ContentType = contentType
+		assets[i].Data = data
+	}
+	parsed.Assets = assets
+	parsed.Images = imageAssetsFromAssets(assets)
 
 	// Rewrite markdown links in a deterministic order.
 	markdown := parsed.Markdown
-	for i := range parsed.Images {
-		oldRef := parsed.Images[i].SourceURL
-		newRef := parsed.Images[i].RelativePath
+	for i := range parsed.Assets {
+		oldRef := parsed.Assets[i].SourceURL
+		newRef := parsed.Assets[i].RelativePath
 		markdown = strings.ReplaceAll(markdown, oldRef, newRef)
 	}
 	parsed.Markdown = markdown
@@ -124,8 +161,8 @@ func (c *Converter) Convert(ctx context.Context, articleURL string, opts core.Co
 	return parsed, nil
 }
 
-func (c *Converter) downloadImage(ctx context.Context, imageURL string) ([]byte, string, string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, imageURL, nil)
+func (c *Converter) downloadAsset(ctx context.Context, assetURL string) ([]byte, string, string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, assetURL, nil)
 	if err != nil {
 		return nil, "", "", err
 	}
@@ -143,7 +180,7 @@ func (c *Converter) downloadImage(ctx context.Context, imageURL string) ([]byte,
 		return nil, "", "", err
 	}
 	contentType := resp.Header.Get("Content-Type")
-	ext := imageExt(contentType, imageURL)
+	ext := assetExt(contentType, assetURL)
 	return data, contentType, ext, nil
 }
 
@@ -158,7 +195,7 @@ func sanitizeFileName(s string) string {
 	return s
 }
 
-func imageExt(contentType, imageURL string) string {
+func assetExt(contentType, sourceURL string) string {
 	if contentType != "" {
 		mediaType, _, err := mime.ParseMediaType(contentType)
 		if err == nil {
@@ -167,12 +204,46 @@ func imageExt(contentType, imageURL string) string {
 			}
 		}
 	}
-	u, err := url.Parse(imageURL)
+	u, err := url.Parse(sourceURL)
 	if err == nil {
 		ext := strings.ToLower(path.Ext(u.Path))
 		if ext != "" && len(ext) <= 5 {
 			return ext
 		}
 	}
+	if inferAssetType(contentType) == core.AssetTypeVideo {
+		return ".mp4"
+	}
 	return ".jpg"
+}
+
+func inferAssetType(contentType string) core.AssetType {
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return ""
+	}
+	if strings.HasPrefix(mediaType, "video/") {
+		return core.AssetTypeVideo
+	}
+	if strings.HasPrefix(mediaType, "image/") {
+		return core.AssetTypeImage
+	}
+	return ""
+}
+
+func imageAssetsFromAssets(assets []core.Asset) []core.ImageAsset {
+	images := make([]core.ImageAsset, 0, len(assets))
+	for _, asset := range assets {
+		if asset.Type != core.AssetTypeImage {
+			continue
+		}
+		images = append(images, core.ImageAsset{
+			SourceURL:    asset.SourceURL,
+			RelativePath: asset.RelativePath,
+			FileName:     asset.FileName,
+			ContentType:  asset.ContentType,
+			Data:         asset.Data,
+		})
+	}
+	return images
 }
