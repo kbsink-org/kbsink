@@ -3,6 +3,7 @@ package kbsink
 import (
 	"context"
 	"fmt"
+	"html"
 	"io"
 	"mime"
 	"net/http"
@@ -75,6 +76,10 @@ func (c *Converter) Convert(ctx context.Context, articleURL string, opts core.Co
 	outputRoot := opts.OutputRoot
 	if outputRoot == "" {
 		outputRoot = defaultOutputRoot
+	}
+	videoMode := opts.VideoMode
+	if videoMode == "" {
+		videoMode = core.VideoModeLink
 	}
 
 	raw, err := c.driver.Fetch(ctx, articleURL)
@@ -152,6 +157,9 @@ func (c *Converter) Convert(ctx context.Context, articleURL string, opts core.Co
 		oldRef := parsed.Assets[i].SourceURL
 		newRef := parsed.Assets[i].RelativePath
 		markdown = strings.ReplaceAll(markdown, oldRef, newRef)
+		if parsed.Assets[i].Type == core.AssetTypeVideo && videoMode == core.VideoModeEmbed {
+			markdown = strings.ReplaceAll(markdown, "[video]("+newRef+")", videoMarkdownEmbed(newRef))
+		}
 	}
 	parsed.Markdown = markdown
 
@@ -159,6 +167,11 @@ func (c *Converter) Convert(ctx context.Context, articleURL string, opts core.Co
 		return nil, fmt.Errorf("save article: %w", err)
 	}
 	return parsed, nil
+}
+
+func videoMarkdownEmbed(src string) string {
+	escaped := html.EscapeString(src)
+	return "<video controls src=\"" + escaped + "\"></video>"
 }
 
 func (c *Converter) downloadAsset(ctx context.Context, assetURL string) ([]byte, string, string, error) {

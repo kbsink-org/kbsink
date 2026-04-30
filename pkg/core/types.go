@@ -53,4 +53,13 @@ type ArticleResult struct {
 // ConvertOptions controls per-call conversion behavior.
 type ConvertOptions struct {
 	OutputRoot string
+	VideoMode  VideoMode
 }
+
+// VideoMode controls how video assets are rendered in markdown.
+type VideoMode string
+
+const (
+	VideoModeLink  VideoMode = "link"
+	VideoModeEmbed VideoMode = "embed"
+)

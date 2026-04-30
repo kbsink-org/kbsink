@@ -156,3 +156,41 @@ func TestConvertWithImageAndVideoAssets(t *testing.T) {
 		t.Fatalf("expected 1 image in compatibility field, got %d", len(res.Images))
 	}
 }
+
+func TestConvertWithEmbedVideoMode(t *testing.T) {
+	videoData := []byte{4, 5, 6}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/video.mp4", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "video/mp4")
+		_, _ = w.Write(videoData)
+	})
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	parser := &stubParser{
+		res: &core.ArticleResult{
+			Title:    "Video Only",
+			Markdown: "[video](" + ts.URL + "/video.mp4)",
+			Assets: []core.Asset{
+				{Type: core.AssetTypeVideo, SourceURL: ts.URL + "/video.mp4"},
+			},
+		},
+	}
+	memStore := &memoryStorage{}
+	c := NewConverter(
+		WithDriver(&stubDriver{res: &core.FetchResult{URL: ts.URL + "/post", HTML: "<html></html>"}}),
+		WithParser(parser),
+		WithStorage(memStore),
+		WithHTTPClient(ts.Client()),
+	)
+	res, err := c.Convert(context.Background(), ts.URL+"/post", core.ConvertOptions{
+		OutputRoot: "output",
+		VideoMode:  core.VideoModeEmbed,
+	})
+	if err != nil {
+		t.Fatalf("convert error: %v", err)
+	}
+	if !strings.Contains(res.Markdown, "<video controls src=\"videos/video_001.") {
+		t.Fatalf("video should be embedded: %q", res.Markdown)
+	}
+}

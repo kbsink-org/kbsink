@@ -47,7 +47,7 @@ func (p *WechatParser) Parse(_ context.Context, fetched *core.FetchResult, outpu
 		if src == "" {
 			src = strings.TrimSpace(sel.AttrOr("src", ""))
 		}
-		if src != "" {
+		if isFetchableAssetURL(src) {
 			images = append(images, core.ImageAsset{
 				SourceURL:    src,
 				RelativePath: path.Join(outputDir, "images"),

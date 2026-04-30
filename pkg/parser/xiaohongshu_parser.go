@@ -94,6 +94,9 @@ func collectMediaAssets(contentSel *goquery.Selection, rawHTML string, outputDir
 		if src == "" {
 			return
 		}
+		if !isFetchableAssetURL(src) {
+			return
+		}
 		if _, ok := seen[src]; ok {
 			return
 		}
@@ -177,4 +180,12 @@ func imageAssetsFromGenericAssets(assets []core.Asset, outputDir string) []core.
 		})
 	}
 	return images
+}
+
+func isFetchableAssetURL(src string) bool {
+	lower := strings.ToLower(strings.TrimSpace(src))
+	if lower == "" {
+		return false
+	}
+	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://")
 }

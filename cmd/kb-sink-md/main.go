@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kbsink-org/kbsink/pkg"
+	kbsink "github.com/kbsink-org/kbsink/pkg"
 	"github.com/kbsink-org/kbsink/pkg/core"
 	prs "github.com/kbsink-org/kbsink/pkg/parser"
 )
@@ -19,7 +19,8 @@ func main() {
 		outputRoot = flag.String("o", "output", "output root directory")
 		timeout    = flag.Duration("timeout", 60*time.Second, "timeout for the conversion")
 		printOnly  = flag.Bool("print", false, "print markdown to stdout (still downloads images; does not save files)")
-		platform   = flag.String("platform", "auto", "platform parser: auto|wechat|xiaohongshu|douyin")
+		platform   = flag.String("platform", "auto", "platform parser: auto|wechat|xiaohongshu")
+		videoMode  = flag.String("video-mode", "link", "video markdown mode: link|embed")
 	)
 	flag.Usage = func() {
 		_, _ = fmt.Fprintf(flag.CommandLine.Output(), "Usage:\n  %s [flags] <wechat-article-url>\n\nFlags:\n", os.Args[0])
@@ -46,7 +47,15 @@ func main() {
 		os.Exit(1)
 	}
 	converter := kbsink.NewConverter(kbsink.WithParser(parser))
-	res, err := converter.Convert(ctx, articleURL, core.ConvertOptions{OutputRoot: *outputRoot})
+	mode, err := resolveVideoMode(*videoMode)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "resolve video mode failed: %v\n", err)
+		os.Exit(1)
+	}
+	res, err := converter.Convert(ctx, articleURL, core.ConvertOptions{
+		OutputRoot: *outputRoot,
+		VideoMode:  mode,
+	})
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "convert failed: %v\n", err)
 		os.Exit(1)
@@ -69,6 +78,18 @@ func main() {
 	_, _ = fmt.Fprintf(os.Stdout, "videos: %d\n", videoCount)
 }
 
+func resolveVideoMode(raw string) (core.VideoMode, error) {
+	mode := strings.TrimSpace(strings.ToLower(raw))
+	switch mode {
+	case "", string(core.VideoModeLink):
+		return core.VideoModeLink, nil
+	case string(core.VideoModeEmbed):
+		return core.VideoModeEmbed, nil
+	default:
+		return "", fmt.Errorf("unsupported video mode %q, expected link|embed", raw)
+	}
+}
+
 func resolveParser(platform, articleURL string) (prs.Parser, error) {
 	selected := strings.TrimSpace(strings.ToLower(platform))
 	if selected == "" {
@@ -79,22 +100,18 @@ func resolveParser(platform, articleURL string) (prs.Parser, error) {
 		return prs.NewWechatParser(), nil
 	case "xiaohongshu", "xhs":
 		return prs.NewXiaohongshuParser(), nil
-	case "douyin":
-		return prs.NewDouyinParser(), nil
 	case "auto":
 		host := strings.ToLower(strings.TrimSpace(articleURLHost(articleURL)))
 		switch {
 		case strings.Contains(host, "xiaohongshu.com"), strings.Contains(host, "xhslink.com"):
 			return prs.NewXiaohongshuParser(), nil
-		case strings.Contains(host, "douyin.com"), strings.Contains(host, "iesdouyin.com"):
-			return prs.NewDouyinParser(), nil
 		case strings.Contains(host, "weixin.qq.com"), strings.Contains(host, "mp.weixin.qq.com"):
 			return prs.NewWechatParser(), nil
 		default:
 			return nil, fmt.Errorf("unsupported host for auto platform selection: %q", host)
 		}
 	default:
-		return nil, fmt.Errorf("unsupported platform %q, expected auto|wechat|xiaohongshu|douyin", platform)
+		return nil, fmt.Errorf("unsupported platform %q, expected auto|wechat|xiaohongshu", platform)
 	}
 }
 

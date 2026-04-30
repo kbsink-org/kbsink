@@ -34,6 +34,7 @@ go get github.com/kbsink-org/kbsink
 converter := kbsink.NewConverter()
 res, err := converter.Convert(ctx, "https://mp.weixin.qq.com/s/xxxx", core.ConvertOptions{
     OutputRoot: "output",
+    VideoMode:  core.VideoModeEmbed, // optional: core.VideoModeLink (default)
 })
 ```
 
@@ -90,6 +91,8 @@ go install ./cmd/kb-sink-md
 Run:
 
 ```bash
-kb-sink-md -o output "https://mp.weixin.qq.com/s/xxxx"
+kb-sink-md -o output --video-mode embed "https://mp.weixin.qq.com/s/xxxx"
 ```
+
+Douyin support is currently under integration and not available yet.
 
