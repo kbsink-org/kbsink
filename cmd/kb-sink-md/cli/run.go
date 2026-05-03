@@ -4,6 +4,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	_ "github.com/kbsink-org/kbsink/internal/plugin" // register built-in plugins (wechat, xhs)
 	kbsink "github.com/kbsink-org/kbsink/pkg"
 	"github.com/kbsink-org/kbsink/pkg/core"
+	"github.com/kbsink-org/kbsink/pkg/pluginexec"
 	"github.com/kbsink-org/kbsink/pkg/pluginreg"
 )
 
@@ -40,6 +42,7 @@ func Run(args []string) int {
 		if names := pluginreg.Names(); len(names) > 0 {
 			_, _ = fmt.Fprintf(fs.Output(), "Plugins in this build: %s\n", strings.Join(names, ", "))
 		}
+		_, _ = fmt.Fprintf(fs.Output(), "Other plugin ids may work if a matching kbsink-plugin-<id> binary is on PATH (or set KBSINK_PLUGIN_<ID> to its path).\n")
 	}
 
 	if err := fs.Parse(args[1:]); err != nil {
@@ -75,41 +78,66 @@ func Run(args []string) int {
 	httpClient := httpClientForCLI(*timeout)
 
 	pl, ok := pluginreg.Lookup(pluginName)
-	if !ok {
-		emitError(fmt.Errorf("unknown plugin %q; registered: %s",
-			pluginName, strings.Join(pluginreg.Names(), ", ")))
-		return 1
+	if ok {
+		parser, driver, err := pl.NewComponents(httpClient)
+		if err != nil {
+			emitError(fmt.Errorf("plugin %q: %w", pluginName, err))
+			return 1
+		}
+		if parser == nil {
+			emitError(fmt.Errorf("plugin %q returned nil parser", pluginName))
+			return 1
+		}
+
+		opts := []kbsink.Option{
+			kbsink.WithHTTPClient(httpClient),
+			kbsink.WithParser(parser),
+		}
+		if driver != nil {
+			opts = append(opts, kbsink.WithDriver(driver))
+		}
+		converter := kbsink.NewConverter(opts...)
+
+		res, err := converter.Convert(ctx, articleURL, core.ConvertOptions{
+			OutputRoot: *outputRoot,
+			VideoMode:  mode,
+		})
+		if err != nil {
+			emitError(err)
+			return 1
+		}
+
+		emitSuccess(res)
+		return 0
 	}
-	parser, driver, err := pl.NewComponents(httpClient)
+
+	binPath, err := pluginexec.LookPluginBinary(pluginName)
 	if err != nil {
-		emitError(fmt.Errorf("plugin %q: %w", pluginName, err))
-		return 1
-	}
-	if parser == nil {
-		emitError(fmt.Errorf("plugin %q returned nil parser", pluginName))
+		if errors.Is(err, pluginexec.ErrNotFound) {
+			emitError(fmt.Errorf("unknown plugin %q; registered: %s; external: install kbsink-plugin-%s on PATH or set KBSINK_PLUGIN_%s",
+				pluginName, strings.Join(pluginreg.Names(), ", "), pluginName, pluginEnvSuffix(pluginName)))
+			return 1
+		}
+		emitError(err)
 		return 1
 	}
 
-	opts := []kbsink.Option{
-		kbsink.WithHTTPClient(httpClient),
-		kbsink.WithParser(parser),
-	}
-	if driver != nil {
-		opts = append(opts, kbsink.WithDriver(driver))
-	}
-	converter := kbsink.NewConverter(opts...)
-
-	res, err := converter.Convert(ctx, articleURL, core.ConvertOptions{
+	extRes, err := pluginexec.RunConvert(ctx, binPath, pluginexec.Request{
+		ArticleURL: articleURL,
 		OutputRoot: *outputRoot,
-		VideoMode:  mode,
+		VideoMode:  string(mode),
+		Timeout:    pluginexec.FormatTimeout(*timeout),
 	})
 	if err != nil {
 		emitError(err)
 		return 1
 	}
-
-	emitSuccess(res)
+	emitSuccessExternal(extRes)
 	return 0
+}
+
+func pluginEnvSuffix(pluginName string) string {
+	return strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(pluginName), "-", "_"))
 }
 
 func httpClientForCLI(timeout time.Duration) *http.Client {
@@ -134,6 +162,13 @@ func emitSuccess(res *core.ArticleResult) {
 		}
 	}
 	_, _ = fmt.Fprintf(os.Stdout, "videos: %d\n", videoCount)
+}
+
+func emitSuccessExternal(res *pluginexec.Result) {
+	_, _ = fmt.Fprintf(os.Stdout, "title: %s\n", res.Title)
+	_, _ = fmt.Fprintf(os.Stdout, "markdown: %s\n", res.MarkdownPath)
+	_, _ = fmt.Fprintf(os.Stdout, "images: %d\n", res.Images)
+	_, _ = fmt.Fprintf(os.Stdout, "videos: %d\n", res.Videos)
 }
 
 func resolveVideoMode(raw string) (core.VideoMode, error) {

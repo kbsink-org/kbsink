@@ -88,5 +88,5 @@ Run:
 kb-sink-md --plugin wechat -o output --video-mode embed "https://mp.weixin.qq.com/s/xxxx"
 ```
 
-Douyin support is currently under integration and not available yet.
+For **Douyin** (`--plugin douyin`), keep using **`kb-sink-md`** from this repository and add **`kbsink-plugin-douyin`** to your `PATH` (releases or `go build` from [douyin-plugin](https://github.com/kbsink-org/douyin-plugin), `./cmd/kbsink-plugin-douyin`). The core `kb-sink-md` binary registers only **wechat** and **xhs** in-process; Douyin runs as an external subprocess via the stdin/stdout JSON protocol (`pkg/pluginexec`). You may also set **`KBSINK_PLUGIN_DOUYIN`** to the plugin binary path instead of relying on `PATH`.
 

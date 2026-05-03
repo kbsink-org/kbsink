@@ -88,5 +88,5 @@ go install ./cmd/kb-sink-md
 kb-sink-md --plugin wechat -o output --video-mode embed "https://mp.weixin.qq.com/s/xxxx"
 ```
 
-抖音支持当前仍在集成中，暂未开放。
+使用 **`--plugin douyin`** 时：仍使用本仓库的 **`kb-sink-md`**，并把 [douyin-plugin](https://github.com/kbsink-org/douyin-plugin) 提供的 **`kbsink-plugin-douyin`** 安装到 `PATH`（或从该仓库执行 `go build -o kbsink-plugin-douyin ./cmd/kbsink-plugin-douyin`）。`kb-sink-md` 进程内仅注册 **wechat**、**xhs**；抖音以外部子进程方式执行（协议见 `pkg/pluginexec`）。也可设置环境变量 **`KBSINK_PLUGIN_DOUYIN`** 指向插件二进制路径。
 
