@@ -15,7 +15,7 @@ import (
 
 	"github.com/kbsink-org/kbsink/pkg/core"
 	"github.com/kbsink-org/kbsink/pkg/driver"
-	prs "github.com/kbsink-org/kbsink/pkg/parser"
+	"github.com/kbsink-org/kbsink/pkg/logger"
 	stg "github.com/kbsink-org/kbsink/pkg/storage"
 )
 
@@ -34,11 +34,14 @@ type Converter struct {
 	parser core.Parser
 	store  core.Storage
 	client *http.Client
+	log    logger.Logger
 }
 
 // NewConverter creates a converter with sensible defaults.
 //
-// By default it uses: HTMLDriver + WechatParser + LocalStorage + http.DefaultClient.
+// By default it uses: HTMLDriver + LocalStorage + http.DefaultClient.
+// Inject a Parser with WithParser (platform plugins live in kbsink-plugins).
+// Use WithLogger and optional WithMinLevel for diagnostics.
 func NewConverter(opts ...Option) *Converter {
 	cfg := &converterConfig{
 		client: http.DefaultClient,
@@ -49,14 +52,23 @@ func NewConverter(opts ...Option) *Converter {
 		}
 	}
 
-	if cfg.driver == nil {
-		cfg.driver = driver.NewHTMLDriver(cfg.client, "")
+	log := logger.Resolve(cfg.log)
+	if cfg.minLevelSet {
+		log = logger.WithMinLevel(log, cfg.minLevel)
 	}
-	if cfg.parser == nil {
-		cfg.parser = prs.NewWechatParser()
+
+	if cfg.driver == nil {
+		cfg.driver = driver.NewHTMLDriver(cfg.client, "", log)
+	} else {
+		cfg.driver = logger.WrapDriver(cfg.driver, log, "driver")
+	}
+	if cfg.parser != nil {
+		cfg.parser = logger.WrapParser(cfg.parser, log, "parser")
 	}
 	if cfg.store == nil {
-		cfg.store = stg.NewLocalStorage(defaultOutputRoot)
+		cfg.store = stg.NewLocalStorage(defaultOutputRoot, log)
+	} else {
+		cfg.store = logger.WrapStorage(cfg.store, log, "storage")
 	}
 
 	return &Converter{
@@ -64,13 +76,18 @@ func NewConverter(opts ...Option) *Converter {
 		parser: cfg.parser,
 		store:  cfg.store,
 		client: cfg.client,
+		log:    log,
 	}
 }
 
-// Convert fetches one WeChat article, converts markdown, downloads images, and saves output.
+// Convert fetches article HTML, parses markdown, downloads assets, and saves output.
 func (c *Converter) Convert(ctx context.Context, articleURL string, opts core.ConvertOptions) (*core.ArticleResult, error) {
+	log := c.log
 	if articleURL == "" {
 		return nil, fmt.Errorf("article url is required")
+	}
+	if c.parser == nil {
+		return nil, fmt.Errorf("parser is required: use kbsink.WithParser (see kbsink-plugins)")
 	}
 
 	outputRoot := opts.OutputRoot
@@ -82,14 +99,18 @@ func (c *Converter) Convert(ctx context.Context, articleURL string, opts core.Co
 		videoMode = core.VideoModeLink
 	}
 
+	log.Info("convert start", "url", articleURL, "outputRoot", outputRoot, "videoMode", videoMode)
+
 	raw, err := c.driver.Fetch(ctx, articleURL)
 	if err != nil {
+		log.Error("convert fetch failed", "url", articleURL, "err", err)
 		return nil, fmt.Errorf("fetch article: %w", err)
 	}
 
 	outDir := outputRoot
 	parsed, err := c.parser.Parse(ctx, raw, outDir)
 	if err != nil {
+		log.Error("convert parse failed", "url", articleURL, "err", err)
 		return nil, fmt.Errorf("parse article: %w", err)
 	}
 
@@ -110,11 +131,15 @@ func (c *Converter) Convert(ctx context.Context, articleURL string, opts core.Co
 			})
 		}
 	}
+
+	log.Info("convert download assets", "count", len(assets))
 	imageIdx := 0
 	videoIdx := 0
 	for i := range assets {
-		data, contentType, ext, dlErr := c.downloadAsset(ctx, assets[i].SourceURL)
+		log.Debug("convert download asset", "index", i+1, "url", assets[i].SourceURL, "type", assets[i].Type)
+		data, contentType, ext, dlErr := c.downloadAsset(ctx, assets[i].SourceURL, opts.PrepareAssetRequest, log)
 		if dlErr != nil {
+			log.Error("convert download asset failed", "url", assets[i].SourceURL, "err", dlErr)
 			return nil, fmt.Errorf("download asset %q: %w", assets[i].SourceURL, dlErr)
 		}
 		assetType := assets[i].Type
@@ -147,11 +172,11 @@ func (c *Converter) Convert(ctx context.Context, articleURL string, opts core.Co
 		assets[i].RelativePath = relativePath
 		assets[i].ContentType = contentType
 		assets[i].Data = data
+		log.Debug("convert asset stored", "file", fileName, "bytes", len(data), "contentType", contentType)
 	}
 	parsed.Assets = assets
 	parsed.Images = imageAssetsFromAssets(assets)
 
-	// Rewrite markdown links in a deterministic order.
 	markdown := parsed.Markdown
 	for i := range parsed.Assets {
 		oldRef := parsed.Assets[i].SourceURL
@@ -164,8 +189,11 @@ func (c *Converter) Convert(ctx context.Context, articleURL string, opts core.Co
 	parsed.Markdown = markdown
 
 	if err := c.store.Save(ctx, parsed); err != nil {
+		log.Error("convert save failed", "outputDir", parsed.OutputDir, "err", err)
 		return nil, fmt.Errorf("save article: %w", err)
 	}
+
+	log.Info("convert done", "title", parsed.Title, "outputDir", parsed.OutputDir, "assets", len(parsed.Assets))
 	return parsed, nil
 }
 
@@ -174,18 +202,13 @@ func videoMarkdownEmbed(src string) string {
 	return "<video controls src=\"" + escaped + "\"></video>"
 }
 
-func (c *Converter) downloadAsset(ctx context.Context, assetURL string) ([]byte, string, string, error) {
+func (c *Converter) downloadAsset(ctx context.Context, assetURL string, prepare core.AssetRequestPreparer, log logger.Logger) ([]byte, string, string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, assetURL, nil)
 	if err != nil {
 		return nil, "", "", err
 	}
-	if u, parseErr := url.Parse(assetURL); parseErr == nil {
-		host := strings.ToLower(u.Host)
-		if strings.Contains(host, "xhscdn.com") || strings.Contains(host, "xiaohongshu.com") {
-			// XHS CDNs often return 403 without a browser-like UA and same-site Referer.
-			req.Header.Set("Referer", "https://www.xiaohongshu.com/")
-			req.Header.Set("User-Agent", driver.DefaultXHSUserAgent())
-		}
+	if prepare != nil {
+		prepare(req, assetURL)
 	}
 
 	resp, err := c.client.Do(req)
@@ -195,6 +218,7 @@ func (c *Converter) downloadAsset(ctx context.Context, assetURL string) ([]byte,
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Warn("asset download bad status", "url", assetURL, "status", resp.Status)
 		return nil, "", "", fmt.Errorf("unexpected status: %s", resp.Status)
 	}
 	data, err := io.ReadAll(resp.Body)
@@ -217,7 +241,6 @@ func sanitizeFileName(s string) string {
 	return s
 }
 
-// preferredImageExt picks a widely-supported suffix for common image/* MIME types.
 func preferredImageExt(mediaType string) string {
 	switch strings.ToLower(strings.TrimSpace(mediaType)) {
 	case "image/jpeg", "image/jpg":
@@ -233,7 +256,6 @@ func preferredImageExt(mediaType string) string {
 	}
 }
 
-// pickKnownGoodExt prefers .jpg over .jpe (mime can list .jpe first) so previews open reliably.
 func pickKnownGoodExt(exts []string) string {
 	priority := []string{".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".bmp", ".ico"}
 	lower := make([]string, len(exts))

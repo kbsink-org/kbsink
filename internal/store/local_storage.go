@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/kbsink-org/kbsink/pkg/core"
+	"github.com/kbsink-org/kbsink/pkg/logger"
 )
 
 const defaultOutputRoot = "output"
@@ -14,21 +15,25 @@ const defaultOutputRoot = "output"
 // LocalStorage saves markdown and images into local filesystem.
 type LocalStorage struct {
 	root string
+	log  logger.Logger
 }
 
-func NewLocalStorage(root string) *LocalStorage {
+func NewLocalStorage(root string, log logger.Logger) *LocalStorage {
 	if root == "" {
 		root = defaultOutputRoot
 	}
-	return &LocalStorage{root: root}
+	return &LocalStorage{root: root, log: logger.Resolve(log)}
 }
 
 func (s *LocalStorage) Save(_ context.Context, article *core.ArticleResult) error {
 	if article == nil {
 		return fmt.Errorf("article is nil")
 	}
+	s.log.Debug("local storage: save start", "outputDir", article.OutputDir, "title", article.Title)
+
 	baseDir := filepath.FromSlash(article.OutputDir)
 	if err := os.MkdirAll(baseDir, 0o755); err != nil {
+		s.log.Error("local storage: mkdir failed", "dir", baseDir, "err", err)
 		return err
 	}
 	assets := article.Assets
@@ -49,15 +54,20 @@ func (s *LocalStorage) Save(_ context.Context, article *core.ArticleResult) erro
 	for _, asset := range assets {
 		target := filepath.Join(baseDir, filepath.FromSlash(asset.RelativePath))
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			s.log.Error("local storage: asset mkdir failed", "path", target, "err", err)
 			return err
 		}
 		if err := os.WriteFile(target, asset.Data, 0o644); err != nil {
+			s.log.Error("local storage: write asset failed", "path", target, "err", err)
 			return err
 		}
+		s.log.Debug("local storage: wrote asset", "path", target, "bytes", len(asset.Data))
 	}
 	mdPath := filepath.FromSlash(article.MarkdownPath)
 	if err := os.WriteFile(mdPath, []byte(article.Markdown), 0o644); err != nil {
+		s.log.Error("local storage: write markdown failed", "path", mdPath, "err", err)
 		return err
 	}
+	s.log.Info("local storage: save done", "markdownPath", mdPath, "assets", len(assets))
 	return nil
 }

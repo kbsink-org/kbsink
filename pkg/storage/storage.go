@@ -6,14 +6,17 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/kbsink-org/kbsink/internal/store"
 	"github.com/kbsink-org/kbsink/pkg/core"
+	"github.com/kbsink-org/kbsink/pkg/logger"
 )
 
 // NewLocalStorage writes output under a filesystem root directory.
-func NewLocalStorage(root string) core.Storage {
-	return store.NewLocalStorage(root)
+// log may be nil (uses [logger.Resolve]).
+func NewLocalStorage(root string, log logger.Logger) core.Storage {
+	return store.NewLocalStorage(root, log)
 }
 
 // NewS3Storage uploads markdown and assets to an S3-compatible bucket.
-func NewS3Storage(client *s3.Client, bucket, prefix string) (core.Storage, error) {
-	return store.NewS3Storage(client, bucket, prefix)
+// log may be nil (uses [logger.Resolve]).
+func NewS3Storage(client *s3.Client, bucket, prefix string, log logger.Logger) (core.Storage, error) {
+	return store.NewS3Storage(client, bucket, prefix, log)
 }

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/kbsink-org/kbsink/pkg/core"
+	"github.com/kbsink-org/kbsink/pkg/logger"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -22,9 +23,10 @@ type S3Storage struct {
 	client s3PutObjectAPI
 	bucket string
 	prefix string
+	log    logger.Logger
 }
 
-func NewS3Storage(client *s3.Client, bucket, prefix string) (*S3Storage, error) {
+func NewS3Storage(client *s3.Client, bucket, prefix string, log logger.Logger) (*S3Storage, error) {
 	if client == nil {
 		return nil, fmt.Errorf("s3 client is nil")
 	}
@@ -36,6 +38,7 @@ func NewS3Storage(client *s3.Client, bucket, prefix string) (*S3Storage, error) 
 		client: client,
 		bucket: bucket,
 		prefix: prefix,
+		log:    logger.Resolve(log),
 	}, nil
 }
 
@@ -43,9 +46,11 @@ func (s *S3Storage) Save(ctx context.Context, article *core.ArticleResult) error
 	if article == nil {
 		return fmt.Errorf("article is nil")
 	}
+	s.log.Debug("s3 storage: save start", "bucket", s.bucket, "outputDir", article.OutputDir, "title", article.Title)
 
 	mdKey := s.fullKey(article.MarkdownPath)
 	if err := s.put(ctx, mdKey, []byte(article.Markdown), "text/markdown; charset=utf-8"); err != nil {
+		s.log.Error("s3 storage: upload markdown failed", "key", mdKey, "err", err)
 		return fmt.Errorf("upload markdown: %w", err)
 	}
 
@@ -71,9 +76,12 @@ func (s *S3Storage) Save(ctx context.Context, article *core.ArticleResult) error
 			contentType = "application/octet-stream"
 		}
 		if err := s.put(ctx, key, asset.Data, contentType); err != nil {
+			s.log.Error("s3 storage: upload asset failed", "key", key, "file", asset.FileName, "err", err)
 			return fmt.Errorf("upload asset %q: %w", asset.FileName, err)
 		}
+		s.log.Debug("s3 storage: uploaded asset", "key", key, "bytes", len(asset.Data))
 	}
+	s.log.Info("s3 storage: save done", "bucket", s.bucket, "markdownKey", mdKey, "assets", len(assets))
 	return nil
 }
 

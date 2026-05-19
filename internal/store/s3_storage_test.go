@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/kbsink-org/kbsink/pkg/core"
+	"github.com/kbsink-org/kbsink/pkg/logger"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
@@ -28,6 +29,7 @@ func TestS3StorageSave(t *testing.T) {
 		client: client,
 		bucket: "demo-bucket",
 		prefix: "articles",
+		log:    logger.Nop{},
 	}
 	article := &core.ArticleResult{
 		OutputDir:    "output/demo",

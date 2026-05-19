@@ -11,7 +11,7 @@ import (
 )
 
 func TestNewHTMLDriverFetch_ErrorCodes(t *testing.T) {
-	d := driver.NewHTMLDriver(nil, "")
+	d := driver.NewHTMLDriver(nil, "", nil)
 
 	_, err := d.Fetch(context.Background(), "")
 	if got := core.ErrorCodeOf(err); got != core.ErrCodeInvalidArgument {
@@ -30,7 +30,7 @@ func TestNewHTMLDriverFetch_UnexpectedStatusCode(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	d := driver.NewHTMLDriver(ts.Client(), "")
+	d := driver.NewHTMLDriver(ts.Client(), "", nil)
 	_, err := d.Fetch(context.Background(), ts.URL)
 	if got := core.ErrorCodeOf(err); got != core.ErrCodeDriverUnexpectedHTTP {
 		t.Fatalf("expected %s, got %s (err=%v)", core.ErrCodeDriverUnexpectedHTTP, got, err)
