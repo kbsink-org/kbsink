@@ -33,7 +33,7 @@ type Converter struct {
 	driver core.Driver
 	parser core.Parser
 	store  core.Storage
-	client *http.Client
+	client core.HTTPClient
 	log    logger.Logger
 }
 

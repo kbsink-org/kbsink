@@ -1,9 +1,6 @@
 package core
 
-import (
-	"context"
-	"net/http"
-)
+import "context"
 
 // Driver fetches article page source by URL.
 type Driver interface {
@@ -23,5 +20,5 @@ type Storage interface {
 // Plugin is a named pair of Parser and Driver for registry-based wiring.
 type Plugin interface {
 	Name() string
-	NewComponents(client *http.Client) (Parser, Driver, error)
+	NewComponents(client HTTPClient) (Parser, Driver, error)
 }

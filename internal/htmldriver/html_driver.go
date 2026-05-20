@@ -13,13 +13,13 @@ import (
 
 // HTMLDriver fetches HTML from a page URL through plain HTTP.
 type HTMLDriver struct {
-	client    *http.Client
+	client    core.HTTPClient
 	userAgent string
 	log       logger.Logger
 }
 
 // New returns an HTML fetch driver. userAgent must be non-empty (callers typically normalize empty to a default).
-func New(client *http.Client, userAgent string, log logger.Logger) *HTMLDriver {
+func New(client core.HTTPClient, userAgent string, log logger.Logger) *HTMLDriver {
 	if client == nil {
 		client = http.DefaultClient
 	}

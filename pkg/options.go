@@ -1,8 +1,6 @@
 package kbsink
 
 import (
-	"net/http"
-
 	"github.com/kbsink-org/kbsink/pkg/core"
 	"github.com/kbsink-org/kbsink/pkg/logger"
 )
@@ -11,7 +9,7 @@ type converterConfig struct {
 	driver      core.Driver
 	parser      core.Parser
 	store       core.Storage
-	client      *http.Client
+	client      core.HTTPClient
 	log         logger.Logger
 	minLevel    logger.Level
 	minLevelSet bool
@@ -32,7 +30,7 @@ func WithStorage(s core.Storage) Option {
 	return func(c *converterConfig) { c.store = s }
 }
 
-func WithHTTPClient(client *http.Client) Option {
+func WithHTTPClient(client core.HTTPClient) Option {
 	return func(c *converterConfig) { c.client = client }
 }
 
