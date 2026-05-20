@@ -52,23 +52,16 @@ func NewConverter(opts ...Option) *Converter {
 		}
 	}
 
-	log := logger.Resolve(cfg.log)
-	if cfg.minLevelSet {
+	log := cfg.log
+	if log != nil && cfg.minLevelSet {
 		log = logger.WithMinLevel(log, cfg.minLevel)
 	}
 
 	if cfg.driver == nil {
 		cfg.driver = driver.NewHTMLDriver(cfg.client, "", log)
-	} else {
-		cfg.driver = logger.WrapDriver(cfg.driver, log, "driver")
-	}
-	if cfg.parser != nil {
-		cfg.parser = logger.WrapParser(cfg.parser, log, "parser")
 	}
 	if cfg.store == nil {
 		cfg.store = stg.NewLocalStorage(defaultOutputRoot, log)
-	} else {
-		cfg.store = logger.WrapStorage(cfg.store, log, "storage")
 	}
 
 	return &Converter{
@@ -82,7 +75,6 @@ func NewConverter(opts ...Option) *Converter {
 
 // Convert fetches article HTML, parses markdown, downloads assets, and saves output.
 func (c *Converter) Convert(ctx context.Context, articleURL string, opts core.ConvertOptions) (*core.ArticleResult, error) {
-	log := c.log
 	if articleURL == "" {
 		return nil, fmt.Errorf("article url is required")
 	}
@@ -99,18 +91,18 @@ func (c *Converter) Convert(ctx context.Context, articleURL string, opts core.Co
 		videoMode = core.VideoModeLink
 	}
 
-	log.Info("convert start", "url", articleURL, "outputRoot", outputRoot, "videoMode", videoMode)
+	c.logInfo("convert start", "url", articleURL, "outputRoot", outputRoot, "videoMode", videoMode)
 
 	raw, err := c.driver.Fetch(ctx, articleURL)
 	if err != nil {
-		log.Error("convert fetch failed", "url", articleURL, "err", err)
+		c.logError("convert fetch failed", "url", articleURL, "err", err)
 		return nil, fmt.Errorf("fetch article: %w", err)
 	}
 
 	outDir := outputRoot
 	parsed, err := c.parser.Parse(ctx, raw, outDir)
 	if err != nil {
-		log.Error("convert parse failed", "url", articleURL, "err", err)
+		c.logError("convert parse failed", "url", articleURL, "err", err)
 		return nil, fmt.Errorf("parse article: %w", err)
 	}
 
@@ -132,14 +124,14 @@ func (c *Converter) Convert(ctx context.Context, articleURL string, opts core.Co
 		}
 	}
 
-	log.Info("convert download assets", "count", len(assets))
+	c.logInfo("convert download assets", "count", len(assets))
 	imageIdx := 0
 	videoIdx := 0
 	for i := range assets {
-		log.Debug("convert download asset", "index", i+1, "url", assets[i].SourceURL, "type", assets[i].Type)
-		data, contentType, ext, dlErr := c.downloadAsset(ctx, assets[i].SourceURL, opts.PrepareAssetRequest, log)
+		c.logDebug("convert download asset", "index", i+1, "url", assets[i].SourceURL, "type", assets[i].Type)
+		data, contentType, ext, dlErr := c.downloadAsset(ctx, assets[i].SourceURL)
 		if dlErr != nil {
-			log.Error("convert download asset failed", "url", assets[i].SourceURL, "err", dlErr)
+			c.logError("convert download asset failed", "url", assets[i].SourceURL, "err", dlErr)
 			return nil, fmt.Errorf("download asset %q: %w", assets[i].SourceURL, dlErr)
 		}
 		assetType := assets[i].Type
@@ -172,7 +164,7 @@ func (c *Converter) Convert(ctx context.Context, articleURL string, opts core.Co
 		assets[i].RelativePath = relativePath
 		assets[i].ContentType = contentType
 		assets[i].Data = data
-		log.Debug("convert asset stored", "file", fileName, "bytes", len(data), "contentType", contentType)
+		c.logDebug("convert asset stored", "file", fileName, "bytes", len(data), "contentType", contentType)
 	}
 	parsed.Assets = assets
 	parsed.Images = imageAssetsFromAssets(assets)
@@ -189,12 +181,36 @@ func (c *Converter) Convert(ctx context.Context, articleURL string, opts core.Co
 	parsed.Markdown = markdown
 
 	if err := c.store.Save(ctx, parsed); err != nil {
-		log.Error("convert save failed", "outputDir", parsed.OutputDir, "err", err)
+		c.logError("convert save failed", "outputDir", parsed.OutputDir, "err", err)
 		return nil, fmt.Errorf("save article: %w", err)
 	}
 
-	log.Info("convert done", "title", parsed.Title, "outputDir", parsed.OutputDir, "assets", len(parsed.Assets))
+	c.logInfo("convert done", "title", parsed.Title, "outputDir", parsed.OutputDir, "assets", len(parsed.Assets))
 	return parsed, nil
+}
+
+func (c *Converter) logDebug(msg string, kv ...any) {
+	if c.log != nil {
+		c.log.Debug(msg, kv...)
+	}
+}
+
+func (c *Converter) logInfo(msg string, kv ...any) {
+	if c.log != nil {
+		c.log.Info(msg, kv...)
+	}
+}
+
+func (c *Converter) logWarn(msg string, kv ...any) {
+	if c.log != nil {
+		c.log.Warn(msg, kv...)
+	}
+}
+
+func (c *Converter) logError(msg string, kv ...any) {
+	if c.log != nil {
+		c.log.Error(msg, kv...)
+	}
 }
 
 func videoMarkdownEmbed(src string) string {
@@ -202,13 +218,10 @@ func videoMarkdownEmbed(src string) string {
 	return "<video controls src=\"" + escaped + "\"></video>"
 }
 
-func (c *Converter) downloadAsset(ctx context.Context, assetURL string, prepare core.AssetRequestPreparer, log logger.Logger) ([]byte, string, string, error) {
+func (c *Converter) downloadAsset(ctx context.Context, assetURL string) ([]byte, string, string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, assetURL, nil)
 	if err != nil {
 		return nil, "", "", err
-	}
-	if prepare != nil {
-		prepare(req, assetURL)
 	}
 
 	resp, err := c.client.Do(req)
@@ -218,7 +231,7 @@ func (c *Converter) downloadAsset(ctx context.Context, assetURL string, prepare 
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		log.Warn("asset download bad status", "url", assetURL, "status", resp.Status)
+		c.logWarn("asset download bad status", "url", assetURL, "status", resp.Status)
 		return nil, "", "", fmt.Errorf("unexpected status: %s", resp.Status)
 	}
 	data, err := io.ReadAll(resp.Body)

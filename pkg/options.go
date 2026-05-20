@@ -36,8 +36,8 @@ func WithHTTPClient(client *http.Client) Option {
 	return func(c *converterConfig) { c.client = client }
 }
 
-// WithLogger injects pipeline logging for converter, driver, parser, and storage.
-// Nil uses [logger.Default] (nop unless [logger.SetDefault] was called).
+// WithLogger enables pipeline logging on the converter and on built-in HTMLDriver/LocalStorage.
+// Nil or omitted means no logs. Injected driver/parser/storage are not wrapped.
 func WithLogger(l logger.Logger) Option {
 	return func(c *converterConfig) { c.log = l }
 }

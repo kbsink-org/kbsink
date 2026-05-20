@@ -1,9 +1,6 @@
 package core
 
-import (
-	"net/http"
-	"time"
-)
+import "time"
 
 // FetchResult is the raw payload returned by a core.Driver.
 type FetchResult struct {
@@ -53,15 +50,10 @@ type ArticleResult struct {
 	RawHTMLContent string
 }
 
-// AssetRequestPreparer mutates HTTP requests before asset downloads (e.g. CDN Referer).
-type AssetRequestPreparer func(req *http.Request, assetURL string)
-
 // ConvertOptions controls per-call conversion behavior.
 type ConvertOptions struct {
 	OutputRoot string
 	VideoMode  VideoMode
-	// PrepareAssetRequest is called before each asset HTTP GET when non-nil.
-	PrepareAssetRequest AssetRequestPreparer
 }
 
 // VideoMode controls how video assets are rendered in markdown.

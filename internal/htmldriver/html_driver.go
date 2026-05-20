@@ -26,7 +26,7 @@ func New(client *http.Client, userAgent string, log logger.Logger) *HTMLDriver {
 	return &HTMLDriver{
 		client:    client,
 		userAgent: userAgent,
-		log:       logger.Resolve(log),
+		log:       log,
 	}
 }
 
@@ -35,23 +35,31 @@ func (d *HTMLDriver) Fetch(ctx context.Context, rawURL string) (*core.FetchResul
 		return nil, core.NewCodedError(core.ErrCodeInvalidArgument, "url is required", nil)
 	}
 
-	d.log.Debug("html driver: fetch start", "url", rawURL)
+	if d.log != nil {
+		d.log.Debug("html driver: fetch start", "url", rawURL)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
-		d.log.Error("html driver: build request failed", "url", rawURL, "err", err)
+		if d.log != nil {
+			d.log.Error("html driver: build request failed", "url", rawURL, "err", err)
+		}
 		return nil, core.NewCodedError(core.ErrCodeDriverBuildRequest, "build request", err)
 	}
 	req.Header.Set("User-Agent", d.userAgent)
 
 	resp, err := d.client.Do(req)
 	if err != nil {
-		d.log.Error("html driver: request failed", "url", rawURL, "err", err)
+		if d.log != nil {
+			d.log.Error("html driver: request failed", "url", rawURL, "err", err)
+		}
 		return nil, core.NewCodedError(core.ErrCodeDriverRequestFailed, "execute request", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		d.log.Warn("html driver: unexpected status", "url", rawURL, "status", resp.Status)
+		if d.log != nil {
+			d.log.Warn("html driver: unexpected status", "url", rawURL, "status", resp.Status)
+		}
 		return nil, core.NewCodedError(
 			core.ErrCodeDriverUnexpectedHTTP,
 			fmt.Sprintf("unexpected status: %s", resp.Status),
@@ -60,14 +68,18 @@ func (d *HTMLDriver) Fetch(ctx context.Context, rawURL string) (*core.FetchResul
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		d.log.Error("html driver: read body failed", "url", rawURL, "err", err)
+		if d.log != nil {
+			d.log.Error("html driver: read body failed", "url", rawURL, "err", err)
+		}
 		return nil, core.NewCodedError(core.ErrCodeDriverReadBodyFailed, "read response body", err)
 	}
 	finalURL := rawURL
 	if resp.Request != nil && resp.Request.URL != nil {
 		finalURL = resp.Request.URL.String()
 	}
-	d.log.Info("html driver: fetch done", "url", finalURL, "htmlLen", len(body))
+	if d.log != nil {
+		d.log.Info("html driver: fetch done", "url", finalURL, "htmlLen", len(body))
+	}
 	return &core.FetchResult{
 		URL:  finalURL,
 		HTML: string(body),

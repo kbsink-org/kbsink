@@ -12,7 +12,7 @@
 - 可插拔 `Driver`（HTTP HTML 抓取、自定义 API 等）
 - 可插拔 `Parser`（从 kbsink-plugins 注入或自行实现）
 - 可插拔 `Storage`，默认 `LocalStorage`
-- 可选 `PrepareAssetRequest`，用于 CDN 资源下载请求头
+- 可注入 `logger.Logger`，按等级（`debug` / `info` / `warn` / `error`）输出流水线日志
 
 ## 安装
 

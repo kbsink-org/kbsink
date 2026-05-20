@@ -12,7 +12,6 @@ Platform-specific parsers (WeChat, Xiaohongshu, Douyin, …) live in **[kbsink-p
 - Pluggable `Driver` (HTTP HTML fetch, custom APIs, etc.)
 - Pluggable `Parser` (inject from kbsink-plugins or your own)
 - Pluggable `Storage` with default `LocalStorage`
-- Optional `PrepareAssetRequest` for CDN-specific download headers
 - Injectable `logger.Logger` with levels (`debug` / `info` / `warn` / `error`) on converter, driver, parser, and storage
 
 ## Install
