@@ -138,6 +138,7 @@ func (c *Converter) Convert(ctx context.Context, articleURL string, opts core.Co
 		if assetType == "" {
 			assetType = inferAssetType(contentType)
 		}
+		ext = assetExt(contentType, assets[i].SourceURL, assetType, ext)
 		if assetType == "" {
 			assetType = core.AssetTypeImage
 		}
@@ -239,7 +240,7 @@ func (c *Converter) downloadAsset(ctx context.Context, assetURL string) ([]byte,
 		return nil, "", "", err
 	}
 	contentType := resp.Header.Get("Content-Type")
-	ext := assetExt(contentType, assetURL)
+	ext := assetExt(contentType, assetURL, "", "")
 	return data, contentType, ext, nil
 }
 
@@ -285,29 +286,66 @@ func pickKnownGoodExt(exts []string) string {
 	return exts[0]
 }
 
-func assetExt(contentType, sourceURL string) string {
-	if contentType != "" {
+func assetExt(contentType, sourceURL string, declared core.AssetType, fromMIME string) string {
+	ext := fromMIME
+	if ext == "" && contentType != "" {
 		mediaType, _, err := mime.ParseMediaType(contentType)
 		if err == nil {
-			if ext := preferredImageExt(mediaType); ext != "" {
-				return ext
-			}
-			if exts, extErr := mime.ExtensionsByType(mediaType); extErr == nil && len(exts) > 0 {
-				return pickKnownGoodExt(exts)
+			if e := preferredImageExt(mediaType); e != "" {
+				ext = e
+			} else if exts, extErr := mime.ExtensionsByType(mediaType); extErr == nil && len(exts) > 0 {
+				ext = pickKnownGoodExt(exts)
 			}
 		}
 	}
-	u, err := url.Parse(sourceURL)
-	if err == nil {
-		ext := strings.ToLower(path.Ext(u.Path))
-		if ext != "" && len(ext) <= 5 {
-			return ext
+	if ext == "" {
+		if u, err := url.Parse(sourceURL); err == nil {
+			if e := strings.ToLower(path.Ext(u.Path)); e != "" && len(e) <= 5 {
+				ext = e
+			}
 		}
+	}
+	if declared == core.AssetTypeVideo {
+		if ext == "" || isImageFileExt(ext) {
+			if inferAssetType(contentType) == core.AssetTypeVideo {
+				return videoExtFromMIME(contentType)
+			}
+			return ".mp4"
+		}
+		return ext
+	}
+	if ext != "" {
+		return ext
 	}
 	if inferAssetType(contentType) == core.AssetTypeVideo {
-		return ".mp4"
+		return videoExtFromMIME(contentType)
 	}
 	return ".jpg"
+}
+
+func isImageFileExt(ext string) bool {
+	switch strings.ToLower(ext) {
+	case ".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".bmp", ".ico":
+		return true
+	default:
+		return false
+	}
+}
+
+func videoExtFromMIME(contentType string) string {
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return ".mp4"
+	}
+	if exts, extErr := mime.ExtensionsByType(mediaType); extErr == nil && len(exts) > 0 {
+		for _, e := range exts {
+			le := strings.ToLower(e)
+			if le != ".jpg" && le != ".jpeg" && le != ".png" && !isImageFileExt(le) {
+				return le
+			}
+		}
+	}
+	return ".mp4"
 }
 
 func inferAssetType(contentType string) core.AssetType {
